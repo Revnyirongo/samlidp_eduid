@@ -21,10 +21,13 @@ $config = array(
      * external url, no matter where you come from (direct access or via the
      * reverse proxy).
      */
-    'baseurlpath' => 'https://' . $_SERVER['HTTP_HOST']. '/',
+    'baseurlpath' => (
+        isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https://' : 'http://'
+    ) . $_SERVER['HTTP_HOST'] . '/',
     'certdir' => 'cert/',
     'loggingdir' => '/tmp/',
     'datadir' => 'data/',
+    'metadatadir' => __DIR__ . '/metadata',
 
     /*
      * A directory where SimpleSAMLphp can save temporary files.
@@ -862,3 +865,5 @@ $config = array(
     'trusted.url.domains' => array(),
 
 );
+
+return $config;

@@ -96,6 +96,31 @@ class SSPGetter
             $idps = $this->em->getRepository('AppBundle:IdP')->findAll();
         }
         $result = array();
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $incomingHost = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '';
+        $portSuffix = '';
+        $port = null;
+
+        if (!empty($_SERVER['HTTP_X_FORWARDED_PORT']) && ctype_digit((string) $_SERVER['HTTP_X_FORWARDED_PORT'])) {
+            $port = (string) $_SERVER['HTTP_X_FORWARDED_PORT'];
+        } elseif (strpos($incomingHost, ':') !== false) {
+            $parts = explode(':', $incomingHost);
+            $portCandidate = array_pop($parts);
+            if (ctype_digit($portCandidate)) {
+                $port = $portCandidate;
+            }
+        } elseif (!empty($_SERVER['SERVER_PORT']) && ctype_digit((string) $_SERVER['SERVER_PORT'])) {
+            $port = (string) $_SERVER['SERVER_PORT'];
+        }
+
+        if ($port !== null) {
+            $isHttps = ($scheme === 'https');
+            $isDefaultPort = ($isHttps && $port === '443') || (!$isHttps && $port === '80');
+            if (!$isDefaultPort) {
+                $portSuffix = ':' . $port;
+            }
+        }
+
         foreach ($idps as $idp) {
             if (strlen($idp->getInstituteName())>1) {
                 $handle = fopen('/app/vendor/simplesamlphp/simplesamlphp/cert/'.$idp->getHostname().'.key', 'w');
@@ -127,8 +152,8 @@ class SSPGetter
                     'name' => array(
                         'en' => $idp->getInstituteName(),
                     ),
-                    'SingleSignOnService' => 'https://'.$idp->getHostname().'.'.$this->samlidp_hostname.'/saml2/idp/SSOService.php',
-                    'SingleLogoutService' => 'https://'.$idp->getHostname().'.'.$this->samlidp_hostname.'/saml2/idp/SingleLogoutService.php',
+                    'SingleSignOnService' => $scheme.'://'.$idp->getHostname().'.'.$this->samlidp_hostname.$portSuffix.'/saml2/idp/SSOService.php',
+                    'SingleLogoutService' => $scheme.'://'.$idp->getHostname().'.'.$this->samlidp_hostname.$portSuffix.'/saml2/idp/SingleLogoutService.php',
                     'SingleSignOnServiceBinding' => array(
                         'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect',
                         'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST'

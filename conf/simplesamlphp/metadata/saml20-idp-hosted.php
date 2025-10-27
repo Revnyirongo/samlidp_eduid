@@ -14,3 +14,5 @@ $container = $kernel->getContainer();
 $sspgetter = $container->get('appbundle.sspgetter');
 
 $metadata = $sspgetter->getIdps($_SERVER['HTTP_HOST']);
+
+return $metadata;

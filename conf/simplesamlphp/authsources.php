@@ -12,4 +12,6 @@ $kernel = new AppKernel('prod', true);
 $kernel->boot();
 $container = $kernel->getContainer();
 $sspgetter = $container->get('appbundle.sspgetter');
-$config = $sspgetter->getAuthsources($_SERVER['HTTP_HOST']);
+$config = $sspgetter->getAuthsources();
+
+return $config;

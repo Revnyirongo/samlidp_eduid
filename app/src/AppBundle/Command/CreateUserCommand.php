@@ -99,11 +99,15 @@ EOT
 
         $user->setUsername($username)
             ->setEmail($email)
-            ->setPassword($password)
+            ->setPlainPassword($password)
             ->setSn($sn)
             ->setGivenName($givenname)
-            ->setEnabled(true)
+            ->setEnabled(!$inactive)
         ;
+
+        if ($superadmin) {
+            $user->addRole('ROLE_SUPER_ADMIN');
+        }
 
         $this->userManager->updateUser($user);
 

@@ -12,3 +12,5 @@ $attributemap = array(
     'subject-id' => 'urn:oasis:names:tc:SAML:attribute:subject-id',
     'pairwise-id' => 'urn:oasis:names:tc:SAML:attribute:pairwise-id'
 );
+
+return $attributemap;

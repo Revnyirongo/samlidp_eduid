@@ -45,3 +45,5 @@ $metadata['https://attributes.'.$sspgetter->getSamlidpHostname().'/module.php/sa
   ),
   'certificate' => 'attributes.' . $sspgetter->getSamlidpHostname() . '.crt'
 );
+
+return $metadata;

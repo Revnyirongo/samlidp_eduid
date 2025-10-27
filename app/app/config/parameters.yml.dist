@@ -2,23 +2,36 @@
 # Set parameters here that may be different on each deployment target of the app, e.g. development, staging, production.
 # http://symfony.com/doc/current/best_practices/configuration.html#infrastructure-related-configuration
 parameters:
-    database_host:     '%env(DATABASE_HOST)%'
-    env(DATABASE_HOST): 127.0.0.1
-    database_port:     '%env(DATABASE_PORT)%'
-    env(DATABASE_PORT): 3306
-    database_name:     '%env(DATABASE_NAME)%'
-    env(DATABASE_NAME): symfony
-    database_user:     '%env(DATABASE_USER)%'
-    env(DATABASE_USER): symfony
-    database_password: '%env(DATABASE_PASSWORD)%'
-    env(DATABASE_PASSWORD): Fhw8j6HxxUXY
+    database_host:     '%env(POSTGRES_HOST)%'
+    env(POSTGRES_HOST): 127.0.0.1
+    database_port:     '%env(POSTGRES_PORT)%'
+    env(POSTGRES_PORT): 5432
+    database_name:     '%env(POSTGRES_DB)%'
+    env(POSTGRES_DB): symfony
+    database_user:     '%env(POSTGRES_USER)%'
+    env(POSTGRES_USER): symfony
+    database_password: '%env(POSTGRES_PASSWORD)%'
+    env(POSTGRES_PASSWORD): change_me
     database_driver: '%env(DATABASE_DRIVER)%'
-    env(DATABASE_DRIVER): pdo_mysql
+    env(DATABASE_DRIVER): pdo_pgsql
     database_version: '%env(DATABASE_VERSION)%'
-    env(DATABASE_VERSION): 5.7
+    env(DATABASE_VERSION): 16
+    database_url: '%env(DATABASE_URL)%'
+    env(DATABASE_URL): 'postgresql://symfony:change_me@127.0.0.1:5432/symfony'
 
     samlidp_hostname: '%env(SAMLIDP_HOSTNAME)%'
-    env(SAMLIDP_HOSTNAME): example.org
+    env(SAMLIDP_HOSTNAME): idpuni.localhost
+
+    saml_idp_entity_id: '%env(SAML_IDP_ENTITY_ID)%'
+    env(SAML_IDP_ENTITY_ID): https://idpuni.localhost/saml2/idp/metadata.php
+    saml_idp_sso_url: '%env(SAML_IDP_SSO_URL)%'
+    env(SAML_IDP_SSO_URL): https://idpuni.localhost/saml2/idp/SSOService.php
+    saml_idp_cert_path: '%env(SAML_IDP_CERT_PATH)%'
+    env(SAML_IDP_CERT_PATH): '%kernel.root_dir%/../certs/idp.crt'
+    saml_idp_key_path: '%env(SAML_IDP_KEY_PATH)%'
+    env(SAML_IDP_KEY_PATH): '%kernel.root_dir%/../certs/idp.key'
+
+    trusted_proxies: ['127.0.0.1', '::1']
 
     templatebundle_name: '%env(TEMPLATEBUNDLE_NAME)%'
     env(TEMPLATEBUNDLE_NAME): AppBundle

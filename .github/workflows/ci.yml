@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Prepare environment
+        run: |
+          make env
+          make certs
+
+      - name: Build images
+        run: docker compose build
+
+      - name: Start services
+        run: docker compose up -d
+
+      - name: Wait for application to become responsive
+        run: |
+          set -e
+          for i in {1..60}; do
+            if curl -fsS http://localhost:8080/health > /dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker compose logs app
+          exit 1
+
+      - name: Check formatting
+        run: docker compose exec -T app ./vendor/bin/phpcbf --dry-run --quiet
+
+      - name: Lint
+        run: docker compose exec -T app ./vendor/bin/phpcs
+
+      - name: Run tests
+        run: docker compose exec -T -e APP_ENV=test -e APP_DEBUG=1 -e SYMFONY_DEPRECATIONS_HELPER=weak app ./vendor/bin/simple-phpunit
+
+      - name: Shutdown
+        if: always()
+        run: docker compose down -v

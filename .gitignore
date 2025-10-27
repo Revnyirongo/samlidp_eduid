@@ -7,6 +7,7 @@
 
 # Parameters
 /app/config/parameters.yml
+/app/app/config/parameters.yml
 /app/config/parameters.ini
 
 # Managed by Composer
@@ -48,3 +49,6 @@
 .DS_Store
 
 .idea
+.env
+certs/*.crt
+certs/*.key

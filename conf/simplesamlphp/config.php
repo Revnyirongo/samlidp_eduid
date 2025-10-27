@@ -4,6 +4,44 @@
  * 
  */
 
+// Detect scheme and host dynamically so multi-tenant hosts build correct URLs
+$scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+$detectedHost = $_SERVER['HTTP_HOST'] ?? 'localhost:8080';
+$base = $scheme . '://' . $detectedHost . '/';
+
+$hostWithoutPort = strtolower(preg_replace('/:\\d+$/', '', $detectedHost));
+$trustedDomains = array('eduid.africa');
+if ($hostWithoutPort !== '') {
+    $trustedDomains[] = $hostWithoutPort;
+    $labels = explode('.', $hostWithoutPort);
+    if (count($labels) > 2) {
+        $trustedDomains[] = implode('.', array_slice($labels, -2));
+    }
+}
+
+$baseDomain = getenv('SAMLIDP_HOSTNAME');
+if (!empty($baseDomain)) {
+    $trustedDomains[] = strtolower(trim($baseDomain));
+}
+
+$extraTrusted = getenv('SAMLIDP_TRUSTED_DOMAINS');
+if (!empty($extraTrusted)) {
+    foreach (preg_split('/[\s,]+/', $extraTrusted) as $entry) {
+        $entry = strtolower(trim($entry));
+        if ($entry !== '') {
+            $trustedDomains[] = $entry;
+        }
+    }
+}
+
+$trustedDomains = array_values(array_unique(array_filter($trustedDomains)));
+
+$projectRoot = dirname(dirname(__DIR__));
+$certDirectory = $projectRoot . '/certs';
+if (!is_dir($certDirectory)) {
+    @mkdir($certDirectory, 0700, true);
+}
+
 $config = array(
 
     /*
@@ -21,10 +59,8 @@ $config = array(
      * external url, no matter where you come from (direct access or via the
      * reverse proxy).
      */
-    'baseurlpath' => (
-        isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https://' : 'http://'
-    ) . $_SERVER['HTTP_HOST'] . '/',
-    'certdir' => 'cert/',
+    'baseurlpath' => '/',
+    'certdir' => $certDirectory,
     'loggingdir' => '/tmp/',
     'datadir' => 'data/',
     'metadatadir' => __DIR__ . '/metadata',
@@ -862,7 +898,7 @@ $config = array(
      * Example:
      *   'trusted.url.domains' => array('sp.example.com', 'app.example.com'),
      */
-    'trusted.url.domains' => array(),
+    'trusted.url.domains' => $trustedDomains,
 
 );
 

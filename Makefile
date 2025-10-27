@@ -4,6 +4,13 @@ env:
 certs:
 	./scripts/gen-certs.sh
 
+tenant-cert:
+	@if [ -z "$(host)" ]; then \
+		echo "Usage: make tenant-cert host=<tenant-host> [extra=\"alt1 alt2\"]" >&2; \
+		exit 1; \
+	fi
+	./scripts/gencerts.sh $(host) $(extra)
+
 up:
 	docker compose up --build
 

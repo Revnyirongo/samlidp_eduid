@@ -3,6 +3,7 @@
 namespace AppBundle\Utils;
 
 use AppBundle\Entity\IdPAudit;
+use AppBundle\Entity\IdP;
 use Doctrine\ORM\EntityNotFoundException;
 use Symfony\Component\Translation\DataCollectorTranslator;
 
@@ -121,20 +122,22 @@ class SSPGetter
             }
         }
 
+        $hostWithoutPort = strtolower(preg_replace('/:\\d+$/', '', (string) $incomingHost));
+
         foreach ($idps as $idp) {
             if (strlen($idp->getInstituteName())>1) {
-                $handle = fopen('/app/vendor/simplesamlphp/simplesamlphp/cert/'.$idp->getHostname().'.key', 'w');
-                fwrite($handle, $idp->getCertKey());
-                fclose($handle);
+                $certDescriptor = $this->resolveCertificateDescriptor($idp, $hostWithoutPort);
+                if ($certDescriptor === null) {
+                    // Skip IdP entries without a valid certificate/key pair
+                    continue;
+                }
 
-                $certData = explode("\n", $idp->getCertPem());
-                unset($certData[0]);
-                unset($certData[count($certData)]);
                 $result[$idp->getEntityId($this->samlidp_hostname)] = array(
                     'host' => $idp->getHostname().'.'.$this->samlidp_hostname,
-                    'privatekey' => $idp->getHostname().'.key',
+                    'privatekey' => $certDescriptor['relativeKey'],
+                    'certificate' => $certDescriptor['relativeCert'],
                     'scope' => $idp->getScopes(),
-                    'certData' => implode("\n", $certData),
+                    'certData' => $certDescriptor['certData'],
                     'auth' => 'as-'.$idp->getHostname(),
                     'attributes.NameFormat' => 'urn:oasis:names:tc:SAML:2.0:attrname-format:uri',
                     'userid.attribute' => 'username',
@@ -301,5 +304,151 @@ class SSPGetter
 
         $this->em->persist($newidpaudit);
         $this->em->flush();
+    }
+
+    private function resolveCertificateDescriptor(IdP $idp, $requestHost)
+    {
+        $certBaseDir = $this->getCertBaseDir();
+        $slug = trim((string) $idp->getHostname());
+        $baseDomain = trim((string) $this->samlidp_hostname);
+        $folderCandidates = array();
+        $requestHost = trim((string) $requestHost);
+
+        if ($requestHost !== '') {
+            $folderCandidates[] = $requestHost;
+            if ($baseDomain !== '' && substr($requestHost, -strlen($baseDomain)) === $baseDomain) {
+                $prefix = rtrim(substr($requestHost, 0, -strlen($baseDomain)), '.');
+                if ($prefix !== '') {
+                    $folderCandidates[] = $prefix;
+                }
+            }
+        }
+
+        if ($slug !== '') {
+            if ($baseDomain !== '') {
+                $folderCandidates[] = $slug . '.' . $baseDomain;
+            }
+            $folderCandidates[] = $slug;
+        }
+
+        $folderCandidates[] = 'default';
+        $folderCandidates[] = '';
+        $folderCandidates = array_values(array_unique($folderCandidates));
+
+        foreach ($folderCandidates as $folder) {
+            foreach ($this->candidateCertificatePairs() as $pair) {
+                $paths = $this->buildCertificatePaths($certBaseDir, $folder, $pair['cert'], $pair['key']);
+                if (is_readable($paths['certPath']) && is_readable($paths['keyPath'])) {
+                    $certContent = file_get_contents($paths['certPath']);
+                    if ($certContent === false) {
+                        continue;
+                    }
+
+                    return array(
+                        'certPath' => $paths['certPath'],
+                        'keyPath' => $paths['keyPath'],
+                        'relativeCert' => $paths['relativeCert'],
+                        'relativeKey' => $paths['relativeKey'],
+                        'certData' => $this->normaliseCertificateBody($certContent),
+                    );
+                }
+            }
+        }
+
+        $targetFolder = $slug !== '' ? $slug : 'default';
+        $paths = $this->buildCertificatePaths($certBaseDir, $targetFolder, 'idp.crt.pem', 'idp.key.pem');
+        $certBody = $idp->getCertPem();
+        $keyBody = $idp->getCertKey();
+
+        if ($certBody === null || $certBody === '' || $keyBody === null || $keyBody === '') {
+            return null;
+        }
+
+        $this->ensureDirectory(dirname($paths['certPath']));
+
+        file_put_contents($paths['certPath'], $certBody);
+        file_put_contents($paths['keyPath'], $keyBody);
+        @chmod($paths['keyPath'], 0600);
+
+        return array(
+            'certPath' => $paths['certPath'],
+            'keyPath' => $paths['keyPath'],
+            'relativeCert' => $paths['relativeCert'],
+            'relativeKey' => $paths['relativeKey'],
+            'certData' => $this->normaliseCertificateBody($certBody),
+        );
+    }
+
+    private function candidateCertificatePairs()
+    {
+        return array(
+            array('cert' => 'idp.crt.pem', 'key' => 'idp.key.pem'),
+            array('cert' => 'idp.crt', 'key' => 'idp.key'),
+        );
+    }
+
+    private function buildCertificatePaths($baseDir, $folder, $certFile, $keyFile)
+    {
+        $baseDir = rtrim($baseDir, '/');
+        $folder = trim((string) $folder, '/');
+
+        if ($folder === '') {
+            $certPath = $baseDir . '/' . $certFile;
+            $keyPath = $baseDir . '/' . $keyFile;
+            $relativeCert = $certFile;
+            $relativeKey = $keyFile;
+        } else {
+            $certPath = $baseDir . '/' . $folder . '/' . $certFile;
+            $keyPath = $baseDir . '/' . $folder . '/' . $keyFile;
+            $relativeCert = $folder . '/' . $certFile;
+            $relativeKey = $folder . '/' . $keyFile;
+        }
+
+        return array(
+            'certPath' => $certPath,
+            'keyPath' => $keyPath,
+            'relativeCert' => $relativeCert,
+            'relativeKey' => $relativeKey,
+        );
+    }
+
+    private function normaliseCertificateBody($certificate)
+    {
+        $certificate = trim((string) $certificate);
+        if ($certificate === '') {
+            return '';
+        }
+
+        $lines = preg_split('/\r?\n/', $certificate);
+        $filtered = array();
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '' || strpos($line, '-----BEGIN') === 0 || strpos($line, '-----END') === 0) {
+                continue;
+            }
+            $filtered[] = $line;
+        }
+
+        return implode("\n", $filtered);
+    }
+
+    private function getCertBaseDir()
+    {
+        $projectRoot = realpath(__DIR__ . '/../../../..');
+        if ($projectRoot === false) {
+            $projectRoot = dirname(dirname(dirname(dirname(__DIR__))));
+        }
+
+        $certDir = $projectRoot . '/certs';
+        $this->ensureDirectory($certDir);
+
+        return $certDir;
+    }
+
+    private function ensureDirectory($directory)
+    {
+        if (!is_dir($directory) && !mkdir($directory, 0700, true) && !is_dir($directory)) {
+            throw new \RuntimeException(sprintf('Unable to create directory %s', $directory));
+        }
     }
 }
